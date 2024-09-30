@@ -1,0 +1,6 @@
+.venv/
+/problem_descriptions/
+/problem_submissions/
+/problem_tests/
+/metadata/
+.DS_Store
