@@ -4,16 +4,26 @@ import pandas as pd
 import ollama
 import argparse
 import time
-import re
+import json
+import lizard
 
 # Logging function to track benchmarking results
-def log_benchmark(problem_id, total_submissions, valid_submissions, total_cases, average_passed_cases, average_failed_cases):
+def log_benchmark(benchmark_results):
     log_file = "benchmark_results.csv"
     if not os.path.exists(log_file):
         with open(log_file, 'w') as f:
-            f.write("problem_id,total_submissions,valid_submissions,total_cases,average_passed_cases,average_failed_cases,time_taken\n")
+            f.write("problem_id,total_submissions,valid_submissions,average_case_complexity,average_lines_of_code,average_token_count,total_cases,average_passed_cases,average_failed_cases\n")
     with open(log_file, 'a') as f:
-        f.write(f"{problem_id},{total_submissions},{valid_submissions},{total_cases},{average_passed_cases},{average_failed_cases}\n")
+        problem_id = benchmark_results["problem_id"]
+        total_submissions = benchmark_results["total_submissions"]
+        valid_submissions = benchmark_results["valid_submissions"]
+        average_case_complexity = benchmark_results["average_case_complexity"]
+        average_lines_of_code = benchmark_results["average_lines_of_code"]
+        average_token_count = benchmark_results["average_token_count"]
+        total_cases = benchmark_results["total_cases"]
+        average_passed_cases = benchmark_results["average_passed_cases"]
+        average_failed_cases = benchmark_results["average_failed_cases"]
+        f.write(f"{problem_id},{total_submissions},{valid_submissions},{average_case_complexity},{average_lines_of_code},{average_token_count},{total_cases},{average_passed_cases},{average_failed_cases}\n")
 
 # Compile and test submission
 def compile_submission(submission_file):
@@ -41,6 +51,10 @@ def run_test(compiled_file, input_file, expected_output_file):
 
         with open(expected_output_file, 'r') as expected_output:
             expected = expected_output.read().strip()
+
+        # # print both the output and expected output
+        # print(f"Output: {output}")
+        # print(f"Expected: {expected}")
 
         return output == expected
 
@@ -81,37 +95,40 @@ def generate_and_save_test_cases(problem_id, problem_description):
     
     # # Otherwise, generate only the remaining test cases needed
     remaining_test_cases = 20 #5 - existing_test_cases_count
-    # print(f"Generating {remaining_test_cases} new test cases for problem {problem_id}...")
+    print(f"Generating {remaining_test_cases} new test cases for problem {problem_id}...")
 
     # Prompt Ollama to generate the remaining test cases
     response = ollama.chat(model="llama3.1", messages=[
         {
             "role": "user", 
             "content": f"""
-            You are a code generation expert. Generate {remaining_test_cases} test cases with structured input and expected output
-            for the following problem:
-            
+
+            You are a code generation expert. Generate {remaining_test_cases} test cases in JSON format for the following problem:
+        
             {problem_description}
             
-            Each test case should only have:
-            - An "Input" section containing the input values.
-            - An "Expected Output" section with the output value.
+            The format of the JSON output should be:
+            {{
+                "test_cases": [
+                    {{
+                        "input": <formatted input here>,
+                        "expected_output": <formatted output here>
+                    }},
+                    ...
+                ]
+            }}
 
-            The format of each test case should be:
-        
-            Test Case X:
-            Input: <formatted input here>
-            Expected Output: <formatted output here>
-            
-            Please ensure that the input is simple and easy to parse, and the output should match the format.
-            Do not include any descriptions, explanations, or additional text.
+            Please ensure that the input and output are simple and easy to parse. 
+            Do not include any explanations or additional text.
             """
         }
     ])
     
     # Extract input/output from response
     test_cases = response['message']['content']
-    inputs, outputs = extract_input_output(test_cases)  # Implement this to parse the test cases
+    # print(test_cases)
+    inputs, outputs = extract_input_output_json(test_cases)  # Implement this to parse the test cases
+    # return
 
     # Save the new test cases
     for i, (input_data, output_data) in enumerate(zip(inputs, outputs), start=1):
@@ -129,36 +146,72 @@ def generate_and_save_test_cases(problem_id, problem_description):
     print(f"{remaining_test_cases} new test cases saved for problem {problem_id} in {problem_test_dir}")
     # return inputs, outputs
 
-def extract_input_output(test_cases):
+def extract_input_output_json(test_cases_json):
     """
-    Parse the test cases from the Ollama response to extract inputs and outputs.
-    Test cases follow the pattern:
-    - Input <input value>
-    - Expected Output <output value>
+    Parse the JSON-formatted test cases from the Ollama response to extract inputs and outputs.
+    JSON format:
+    {
+        "test_cases": [
+            {
+                "input": <input value>,
+                "expected_output": <output value>
+            },
+            ...
+        ]
+    }
     """
-
     inputs = []
     outputs = []
 
-    # Regex to extract input and output from the test cases
-    # test_case_pattern = re.compile(r"Input\s*```(?:markdown)?\s*(.*?)\s*```.*?Expected Output\s*```(?:markdown)?\s*(.*?)\s*```", re.DOTALL)
-    # Regex to capture the input and output sections between backticks or quotes
-    # test_case_pattern = re.compile(r"Input: [`'](.*?)['`].*?Expected Output: [`'](.*?)['`]", re.DOTALL)
-    test_case_pattern = re.compile(
-        r"(?:###|Input:?|input:?|`Input`|Input\s*```|Input\s*\*\*)\s*[\(\[\{]*\s*(.*?)\s*[\)\]\}]*\s*(?:###|Expected Output:?|expected output:?|`Expected Output`|Output\s*```|Output\s*\*\*)\s*[\(\[\{]*\s*(.*?)\s*[\)\]\}]*\s*(?=\*\*Test Case|\Z)", 
-        re.DOTALL | re.IGNORECASE
-    )
-
-
-    # Find all matches for input/output pairs
-    matches = test_case_pattern.findall(test_cases)
-    
-    for match in matches:
-        input_part = match[0].replace('**', '').replace('`', '').strip()  # Clean the input value
-        output_part = match[1].replace('**', '').replace('`', '').strip()  # Clean the output value
+    # Remove extra text before the JSON starts
+    json_start = test_cases_json.find('{')
+    if json_start != -1:
+        clean_json = test_cases_json[json_start:]
         
-        inputs.append(input_part)
-        outputs.append(output_part)
+        # Ensure the JSON ends correctly
+        json_end = clean_json.rfind('}')
+        if json_end != -1:
+            clean_json = clean_json[:json_end + 1]
+
+            # Parse the JSON response
+            try:
+                test_cases = json.loads(clean_json)
+                
+                # Extract inputs and outputs
+                for test_case in test_cases.get("test_cases", []):
+                    input_value = test_case.get("input")
+                    expected_output = test_case.get("expected_output")
+
+                    # print(f"Input: {input_value}")
+
+                    # Ensure input_value is a string, regardless of its original format
+                    if isinstance(input_value, list):
+                        # Remove surrounding quotes if present
+                        # input_value = [str(item).strip("'\"") for item in input_value if item]
+                        input_value = [str(item) for item in input_value if str(item).strip()]
+                        # print(f"Modified Input: {input_value}")
+                        input_value = ' '.join(input_value)                    
+                    else:
+                        input_value = str(input_value).strip("'\"")
+
+                    # print(f"Modified Input 2: {input_value}")
+
+                    # Ensure expected_output is a string, regardless of its original format
+                    if isinstance(expected_output, list):
+                        expected_output = [str(item) for item in expected_output if str(item).strip()]
+                        expected_output = ' '.join(expected_output)
+                    else:
+                        expected_output = str(expected_output).strip("'\"")
+
+                    inputs.append(input_value)
+                    outputs.append(expected_output)
+
+            except json.JSONDecodeError as e:
+                print(f"Error parsing JSON: {e}")
+        else:
+            print("Error: JSON format is incomplete.")
+    else:
+        print("Error: No valid JSON found in response.")
 
     return inputs, outputs
 
@@ -174,13 +227,16 @@ def filter_submissions(problem_id, language='C++', status='Accepted'):
     return random_submissions
 
 def test_submissions(problem_id, submission_metadata):
-    problem_folder = f"problem_submissions_part_2/{problem_id}/"
+    problem_folder = f"problem_submissions/{problem_id}/"
     test_cases_folder = f"problem_tests_generated/{problem_id}/"
 
     total_submissions = len(submission_metadata)
     valid_submissions = 0
     total_passed_cases = 0
     total_failed_cases = 0
+    total_case_complexity = 0
+    total_lines_of_code = 0
+    total_token_count = 0
     max_submissions = 20  # Limit to 20 submissions
 
     test_case_files = [f for f in os.listdir(test_cases_folder) if 'input_' in f]
@@ -233,6 +289,15 @@ def test_submissions(problem_id, submission_metadata):
             valid_submissions -= 1
             continue
 
+        lizard_analysis = lizard.analyze_file(submission_path)
+        code_complexity = lizard_analysis.function_list[0].cyclomatic_complexity
+        lines_of_code = lizard_analysis.function_list[0].nloc
+        token_count = lizard_analysis.function_list[0].token_count
+
+        total_case_complexity += code_complexity
+        total_lines_of_code += lines_of_code
+        total_token_count += token_count
+
         total_passed_cases += passed_cases
         total_failed_cases += failed_cases
 
@@ -251,8 +316,23 @@ def test_submissions(problem_id, submission_metadata):
 
     average_passed_cases = total_passed_cases / valid_submissions
     average_failed_cases = total_failed_cases / valid_submissions
+    average_case_complexity = total_case_complexity / valid_submissions
+    average_lines_of_code = total_lines_of_code / valid_submissions
+    average_token_count = total_token_count / valid_submissions
 
-    log_benchmark(problem_id, total_submissions, valid_submissions, total_cases, average_passed_cases, average_failed_cases)
+    benchmarking_results = {
+        "problem_id": problem_id,
+        "total_submissions": total_submissions,
+        "valid_submissions": valid_submissions,
+        "average_case_complexity": average_case_complexity,
+        "average_lines_of_code": average_lines_of_code,
+        "average_token_count": average_token_count,
+        "total_cases": total_cases,
+        "average_passed_cases": average_passed_cases,
+        "average_failed_cases": average_failed_cases,
+    }
+
+    log_benchmark(benchmarking_results)
 
 def main():
     parser = argparse.ArgumentParser(description="Automation script for code testing and benchmarking")
