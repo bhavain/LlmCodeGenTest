@@ -6,6 +6,17 @@ import argparse
 import time
 import json
 import lizard
+from multiprocessing import Pool
+import random
+
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename="automation.log",  # Log file name
+    level=logging.INFO,  # Log level
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Log format
+)
 
 # Logging function to track benchmarking results
 def log_benchmark(benchmark_results):
@@ -60,7 +71,7 @@ def run_test(compiled_file, input_file, expected_output_file):
 
     except subprocess.TimeoutExpired:
         # TimeoutExpired will be raised if the test exceeds the timeout
-        print(f"Test for {compiled_file} timed out after {timeout} seconds. Skipping this test.")
+        logging.warning(f"Test for {compiled_file} timed out after {timeout} seconds. Skipping this test.")
         return False
     
     except subprocess.CalledProcessError:
@@ -95,7 +106,7 @@ def generate_and_save_test_cases(problem_id, problem_description):
     
     # # Otherwise, generate only the remaining test cases needed
     remaining_test_cases = 20 #5 - existing_test_cases_count
-    print(f"Generating {remaining_test_cases} new test cases for problem {problem_id}...")
+    logging.info(f"Generating {remaining_test_cases} new test cases for problem {problem_id}...")
 
     # Prompt Ollama to generate the remaining test cases
     response = ollama.chat(model="llama3.1", messages=[
@@ -143,7 +154,7 @@ def generate_and_save_test_cases(problem_id, problem_description):
         with open(output_file, 'w') as f:
             f.write(output_data)
     
-    print(f"{remaining_test_cases} new test cases saved for problem {problem_id} in {problem_test_dir}")
+    logging.info(f"{remaining_test_cases} new test cases saved for problem {problem_id} in {problem_test_dir}")
     # return inputs, outputs
 
 def extract_input_output_json(test_cases_json):
@@ -207,11 +218,11 @@ def extract_input_output_json(test_cases_json):
                     outputs.append(expected_output)
 
             except json.JSONDecodeError as e:
-                print(f"Error parsing JSON: {e}")
+                logging.error(f"Error parsing JSON: {e}")
         else:
-            print("Error: JSON format is incomplete.")
+            logging.error("Error: JSON format is incomplete.")
     else:
-        print("Error: No valid JSON found in response.")
+        logging.error("Error: No valid JSON found in response.")
 
     return inputs, outputs
 
@@ -245,18 +256,18 @@ def test_submissions(problem_id, submission_metadata):
     for idx, row in submission_metadata.iterrows():
         submission_path = os.path.join(problem_folder, f"{row['submission_id']}.cpp")
         if not os.path.exists(submission_path):
-            print(f"Submission file not found: {submission_path}")
+            logging.warning(f"Submission file not found: {submission_path}")
             continue
         
         compiled_file = compile_submission(submission_path)
 
         if compiled_file is None:
-            print(f"Compilation failed for: {submission_path}")
+            logging.error(f"Compilation failed for: {submission_path}")
             continue
         
         valid_submissions += 1
         submission_skipped = False
-        print(f"Running tests for: {submission_path}")
+        logging.info(f"Running tests for: {submission_path}")
         
         passed_cases = 0
         failed_cases = 0
@@ -272,7 +283,7 @@ def test_submissions(problem_id, submission_metadata):
                 test_end_time = time.time()
                 test_time = test_end_time - test_start_time
                 if test_time >= 10:
-                    print(f"Test for {submission_path} took {test_time} seconds. Skipping this submission.")
+                    logging.warning(f"Test for {submission_path} took {test_time} seconds. Skipping this submission.")
                     submission_skipped = True
                     break
                 
@@ -285,7 +296,7 @@ def test_submissions(problem_id, submission_metadata):
         time_taken = end_time - start_time
 
         if submission_skipped:
-            print(f"Skipping submission: {submission_path}")
+            logging.warning(f"Skipping submission: {submission_path}")
             valid_submissions -= 1
             continue
 
@@ -301,18 +312,18 @@ def test_submissions(problem_id, submission_metadata):
         total_passed_cases += passed_cases
         total_failed_cases += failed_cases
 
-        print(f"Results for {submission_path}: Passed {passed_cases}/{total_cases}, Failed {failed_cases}")
+        logging.info(f"Results for {submission_path}: Passed {passed_cases}/{total_cases}, Failed {failed_cases}")
 
         # Check if the limit of 20 submissions has been reached
         if valid_submissions >= max_submissions:
-            print("Reached limit of 20 submissions. Moving on to next submission.")
+            logging.info("Reached limit of 20 submissions. Moving on to next submission.")
             break
             
     
     # Log the benchmark results    
 
-    print(f"Total passed cases: {total_passed_cases}")
-    print(f"Total failed cases: {total_failed_cases}")
+    # print(f"Total passed cases: {total_passed_cases}")
+    # print(f"Total failed cases: {total_failed_cases}")
 
     average_passed_cases = total_passed_cases / valid_submissions
     average_failed_cases = total_failed_cases / valid_submissions
@@ -334,6 +345,123 @@ def test_submissions(problem_id, submission_metadata):
 
     log_benchmark(benchmarking_results)
 
+def compile_all_submissions(submission_files):
+    with Pool(processes=os.cpu_count()) as pool:
+        compiled_files = pool.map(compile_submission, submission_files)
+    return compiled_files
+
+def execute_test(compiled_file, test_cases_folder, i):
+    input_file = os.path.join(test_cases_folder, f"input_{i}.txt")
+    output_file = os.path.join(test_cases_folder, f"output_{i}.txt")
+    if os.path.exists(input_file) and os.path.exists(output_file):
+        return run_test(compiled_file, input_file, output_file)
+    return False  # Mark as failed if files are missing
+
+def run_all_tests(compiled_file, test_cases_folder, total_cases, timeout=10):
+    with Pool(processes=os.cpu_count()) as pool:
+        results = []
+        for i in range(1, total_cases + 1):
+            try:
+                # Apply async with timeout for each test
+                result = pool.apply_async(execute_test, args=(compiled_file, test_cases_folder, i))
+                results.append(result.get(timeout))  # Retrieve result with timeout
+            except TimeoutError:
+                logging.warning(f"Test case {i} timed out. Skipping submission {compiled_file}.")
+                pool.terminate()  # Stop all ongoing tasks
+                return "timeout"  # Skip this submission
+        pool.close()
+        pool.join()
+    return results  # Return results if all tests pass within timeout
+
+def test_submissions_multi(problem_id, submission_metadata):
+    problem_folder = f"problem_submissions/{problem_id}/"
+    test_cases_folder = f"problem_tests_generated/{problem_id}/"
+
+    total_submissions = len(submission_metadata)
+    valid_submissions = 0
+    total_passed_cases = 0
+    total_failed_cases = 0
+    total_case_complexity = 0
+    total_lines_of_code = 0
+    total_token_count = 0
+    max_submissions = 20  # Limit to 20 submissions
+
+    test_case_files = [f for f in os.listdir(test_cases_folder) if 'input_' in f]
+    total_cases = len(test_case_files)
+
+    # Parallelize compilation
+    submission_paths = [
+        os.path.join(problem_folder, f"{row['submission_id']}.cpp")
+        for _, row in submission_metadata.iterrows()
+        if os.path.exists(os.path.join(problem_folder, f"{row['submission_id']}.cpp"))
+    ]
+
+    # Randomly pick sample_size submissions
+    sample_size = 25
+    if len(submission_paths) > sample_size:
+        submission_paths = random.sample(submission_paths, sample_size)
+
+    compiled_files = compile_all_submissions(submission_paths)
+
+    # Filter out None values (failed compilations)
+    compiled_files = [file for file in compiled_files if file is not None]
+
+    for compiled_file in compiled_files:
+        # print(f"Running tests for: {compiled_file}")
+        
+        # Parallelize test execution
+        results = run_all_tests(compiled_file, test_cases_folder, total_cases)
+
+        if results == "timeout":
+            logging.info(f"Skipping submission {compiled_file} due to timeout.")
+            continue
+
+        # Perform test results analysis if no timeout occurred
+        valid_submissions += 1
+        passed_cases = sum(1 for res in results if res)
+        failed_cases = len(results) - passed_cases
+
+        # Analysis
+        submission_path = compiled_file.replace(".out", ".cpp")
+        lizard_analysis = lizard.analyze_file(submission_path)
+        code_complexity = lizard_analysis.function_list[0].cyclomatic_complexity
+        lines_of_code = lizard_analysis.function_list[0].nloc
+        token_count = lizard_analysis.function_list[0].token_count
+
+        total_case_complexity += code_complexity
+        total_lines_of_code += lines_of_code
+        total_token_count += token_count
+        total_passed_cases += passed_cases
+        total_failed_cases += failed_cases
+
+        logging.info(f"Results for {submission_path}: Passed {passed_cases}/{total_cases}, Failed {failed_cases}")
+
+        if valid_submissions >= max_submissions:
+            logging.info("Reached limit of 20 submissions. Moving on.")
+            break
+
+    # Log aggregated results
+    average_passed_cases = total_passed_cases / valid_submissions
+    average_failed_cases = total_failed_cases / valid_submissions
+    average_case_complexity = total_case_complexity / valid_submissions
+    average_lines_of_code = total_lines_of_code / valid_submissions
+    average_token_count = total_token_count / valid_submissions
+
+    benchmarking_results = {
+        "problem_id": problem_id,
+        "total_submissions": total_submissions,
+        "valid_submissions": valid_submissions,
+        "average_case_complexity": average_case_complexity,
+        "average_lines_of_code": average_lines_of_code,
+        "average_token_count": average_token_count,
+        "total_cases": total_cases,
+        "average_passed_cases": average_passed_cases,
+        "average_failed_cases": average_failed_cases,
+    }
+
+    log_benchmark(benchmarking_results)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Automation script for code testing and benchmarking")
     parser.add_argument('--problem_id', type=str, required=True, help="Problem ID to process")
@@ -350,7 +478,7 @@ def main():
     # Load metadata and test human-generated submissions
     # problem_id = 'p00360'
     submission_metadata = load_problem_metadata(args.problem_id)
-    test_submissions(args.problem_id, submission_metadata)
+    test_submissions_multi(args.problem_id, submission_metadata)
 
 if __name__ == "__main__":
     main()
