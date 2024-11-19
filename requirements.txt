@@ -3,3 +3,4 @@ streamlit
 ollama
 lizard
 plotly
+bs4
