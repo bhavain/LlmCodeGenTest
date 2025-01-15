@@ -18,7 +18,9 @@ def load_problem_list():
 def process_bulk_problems():
     # Simulate loading the problem list from a file or database
     problem_list = ["p00001", "p00002", "p00003", "p00004", "p00005", "p00006", "p00007", "p00008", "p00009", "p00010", 
-                    "p00011", "p00012", "p00015", "p00017", "p00018", "p00019", "p00028", "p00029", "p03992", "p03993", 
+                    "p00011", "p00012", "p00015", "p00017", "p00018", "p00019", "p00028", "p00029", 
+                    "p03752", "p03759", "p03760", 
+                    "p03992", "p03993", 
                     "p03997", "p03999"]
     # problem_list = ["p00001"]
     return problem_list
