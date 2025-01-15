@@ -1,0 +1,34 @@
+You are an AI assistant tasked with generating JSON-formatted programming test cases.
+
+**Problem Details:**
+- **Problem Name:** {problem_name}
+- **Description:** {description}
+- **Input Format:** {model_input}
+- **Output Format:** {model_output}
+
+**Sample Examples:**
+Here are some examples to guide your generation:
+- **Sample Inputs:** {sample_inputs}
+- **Sample Outputs:** {sample_outputs}
+
+**Instructions:**
+1. Generate {num_cases} unique test cases strictly in the following JSON format:
+{{
+    "test_cases": [
+        {{
+            "input": "<formatted input>",
+            "expected_output": "<formatted output>"
+        }},
+        ...
+    ]
+}}
+2. Ensure all inputs conform to the Input Format provided.
+3. Derive expected outputs logically and accurately based on the Output Format.
+4. Validate correctness for each generated test case to ensure accuracy.
+5. Do not include explanations, comments, or additional text in the output.
+
+**Important Notes:**
+- Focus on precision and correctness for each test case.
+- Include edge cases, boundary conditions, and common scenarios.
+- Ensure test cases align with the provided examples and formats.
+
