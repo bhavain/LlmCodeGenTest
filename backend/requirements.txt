@@ -1,0 +1,12 @@
+pandas
+ollama
+lizard
+plotly
+bs4
+fastapi
+uvicorn
+sqlalchemy
+psycopg2
+celery
+redis
+langchain
