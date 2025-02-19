@@ -27,7 +27,6 @@ def get_problem(problem_id: str, db: Session = Depends(get_db)):
     if not problem:
         return {"error": "Problem not found"}
     file_path = os.path.join(PROBLEM_DESC_DIR, f"{problem_id}.html")
-    print(f"File path: {file_path}")
     if not os.path.exists(file_path):
         return {"error": "Problem description not found"}
     
