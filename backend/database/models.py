@@ -36,26 +36,38 @@ class SubmissionMetadata(Base):
     code_size = Column(Integer, nullable=True)
     accuracy = Column(String, nullable=True)
 
+class TestGeneration(Base):
+    """Tracks a test generation session for one or more problems."""
+    __tablename__ = "test_generations"
+
+    generation_id = Column(String, primary_key=True, index=True)  # Unique test generation session
+    problems = Column(Text, nullable=False)  # Comma-separated list of problem IDs
+    status = Column(String, default="pending")  # pending, completed
+    created_at = Column(String, nullable=False)
+
 class TestCase(Base):
     __tablename__ = "test_cases"
-    id = Column(String, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    generation_id = Column(String, ForeignKey("test_generations.generation_id"), nullable=False)
     problem_id = Column(String, ForeignKey("problems.id"), nullable=False)
     input_data = Column(Text, nullable=True)
     expected_output = Column(Text, nullable=True)
 
-# problem_id,total_submissions,valid_submissions,average_case_complexity,average_lines_of_code,average_token_count,
+# generation_id,problem_id,total_submissions,average_case_complexity,average_lines_of_code,average_token_count,
 # total_cases,average_passed_cases,average_failed_cases
 class BenchmarkResult(Base):
     __tablename__ = "benchmark_results"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    problem_id = Column(String, nullable=False)
+    generation_id = Column(String, ForeignKey("test_generations.generation_id"), nullable=False)
+    problem_id = Column(String, ForeignKey("problems.id"), nullable=False)
     total_cases = Column(Integer, nullable=False)
     passed_cases = Column(Integer, nullable=False)
     failed_cases = Column(Integer, nullable=False)
-    average_complexity = Column(Float, nullable=False)
+    average_case_complexity = Column(Float, nullable=False)
     average_lines_of_code = Column(Float, nullable=False)
     average_token_count = Column(Float, nullable=False)
     total_submissions = Column(Integer, nullable=False)
+    created_at = Column(String, nullable=False)
 
 # Initialize Database
 engine = create_engine(DATABASE_URL)
