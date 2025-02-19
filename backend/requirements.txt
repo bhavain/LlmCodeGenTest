@@ -10,3 +10,7 @@ psycopg2
 celery
 redis
 langchain
+langchain_community
+langchain-ollama
+jsonschema
+pydantic
