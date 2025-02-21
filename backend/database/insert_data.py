@@ -16,6 +16,13 @@ def clean_value(value):
 def insert_problems():
     session = SessionLocal()
     
+    # check if any data exists in problem table
+    existing_problems = session.query(Problem).all()
+    if existing_problems:
+        print("⚠️ Problems already exist in the database. Skipping insertion.")
+        session.close()
+        return
+
     # Load problem_list.csv
     df = pd.read_csv("problem_list.csv")  # Ensure correct path
 
@@ -89,6 +96,17 @@ def process_submission_file(problem_id):
 
 def insert_submissions():
     """Run multiprocessing to insert submissions for all problems."""
+
+    # Check if any data exists in submission_metadata table
+    # 
+    session = SessionLocal()
+    existing_submissions = session.query(SubmissionMetadata).first() is not None
+
+    if existing_submissions:
+        print("⚠️ Submissions already exist in the database. Skipping insertion.")
+        session.close()
+        return
+
     problems = [f.replace(".csv", "") for f in os.listdir("problems_metadata") if f.endswith(".csv")]
 
     print(f"🛠️ Starting multiprocessing for {len(problems)} problems...")
@@ -98,8 +116,9 @@ def insert_submissions():
 
     print("✅ Submissions Metadata inserted successfully!")
 
-
+def main():
+    insert_problems()
+    insert_submissions()
 
 if __name__ == "__main__":
-    # insert_problems()
-    insert_submissions()
+    main()
