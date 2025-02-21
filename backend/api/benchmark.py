@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database.models import SessionLocal, SubmissionMetadata, Problem
-from tasks.benchmark import generate_tests_and_run_all_problems
+from tasks.benchmark import generate_tests_and_run_all_problems_task
 from pydantic import BaseModel
 from api.testcases import create_new_test_generation_id
 
@@ -37,7 +37,7 @@ def generate_tests_and_run_all_problems(request: BenchmarkRequest, db: Session =
     if not generation_details:
         return {"error": "Failed to create test generation session"}
 
-    task = generate_tests_and_run_all_problems.delay(generation_details["generation_id"], problem_ids)
+    task = generate_tests_and_run_all_problems_task.delay(generation_details["generation_id"], problem_ids)
     generation_details["task_id"] = task.id
 
     return generation_details
