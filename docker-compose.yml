@@ -1,0 +1,64 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: "docker.env"
+    environment:
+      DOCKER_ENV: true
+    depends_on:
+      - db
+      - redis
+      - celery
+    networks:
+      - app_network
+
+  db:
+    image: postgres:13
+    env_file: "docker.env"
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h $${DATABASE_HOST} -d $${DATABASE_NAME} -U $${DATABASE_USERNAME}"]
+      interval: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app_network
+
+  celery:
+    build: .
+    env_file: "docker.env"
+    working_dir: /app
+    command: ["/app/venv/bin/celery", "-A", "tasks.celery_config", "worker", "--loglevel=info", "--concurrency=4"]
+    depends_on:
+      - redis
+    user: "celery_user"
+    networks:
+      - app_network
+
+  # db_init:  # ✅ Add a new service to run `db_init.py`
+  #     build: .
+  #     working_dir: /app/database
+  #     command: ["/bin/sh", "-c", "/app/venv/bin/python db_init.py && /app/venv/bin/python insert_data.py"]
+  #     depends_on:
+  #       db:
+  #         condition: service_healthy
+  #     environment:
+  #       DATABASE_URL: ${DATABASE_URL}
+  #       DATABASE_USERNAME: ${DATABASE_USERNAME}
+  #       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+  #       DATABASE_NAME: ${DATABASE_NAME}
+  #     restart: "no"
+  #     networks:
+  #       - app_network
+
+networks:
+  app_network:
+    driver: bridge
