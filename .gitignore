@@ -1,9 +1,56 @@
 .venv/
-/problem_descriptions/
-/problem_submissions/
+backend/database/problem_descriptions/
+backend/database/problem_submissions/
 /problem_submissions_part_1/
 /problem_submissions_part_2/
 /problem_tests/
 /problem_tests_generated/
-/metadata/
+backend/database/problems_metadata/
 .DS_Store
+__pycache__/
+*.env
+
+
+# frontend files
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+frontend/node_modules
+frontend/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+frontend//coverage
+
+# next.js
+frontend/.next/
+frontend/out/
+
+# production
+frontend/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
