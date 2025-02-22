@@ -4,7 +4,12 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 # PostgreSQL Connection URL
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://testmaker_user:RubberDuck%4029@localhost/testmaker")
+DATABASE_USERNAME = os.getenv("DATABASE_USERNAME")
+DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")
+DATABASE_NAME = os.getenv("DATABASE_NAME")
+DATABASE_HOST = os.getenv("DATABASE_HOST")
+
+DATABASE_URL = os.getenv("DATABASE_URL", f"postgresql://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}/{DATABASE_NAME}")
 
 Base = declarative_base()
 
@@ -61,8 +66,8 @@ class BenchmarkResult(Base):
     generation_id = Column(String, ForeignKey("test_generations.generation_id"), nullable=False)
     problem_id = Column(String, ForeignKey("problems.id"), nullable=False)
     total_cases = Column(Integer, nullable=False)
-    passed_cases = Column(Integer, nullable=False)
-    failed_cases = Column(Integer, nullable=False)
+    average_passed_cases = Column(Integer, nullable=False)
+    average_failed_cases = Column(Integer, nullable=False)
     average_case_complexity = Column(Float, nullable=False)
     average_lines_of_code = Column(Float, nullable=False)
     average_token_count = Column(Float, nullable=False)
