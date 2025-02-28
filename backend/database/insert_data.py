@@ -1,11 +1,12 @@
 import os
 import pandas as pd
 from sqlalchemy.orm import Session
-from models import Problem, SubmissionMetadata, Base, engine, SessionLocal
+from database.models import Problem, SubmissionMetadata, Base, engine, SessionLocal
 import multiprocessing
 
-# Initialize DB
-Base.metadata.create_all(bind=engine)
+def init_db():
+    Base.metadata.create_all(bind=engine)
+    print("✅ Database initialized.")
 
 def clean_value(value):
     """Convert NaN to None for safe database insertion."""
@@ -46,7 +47,6 @@ def insert_problems():
     session.commit()
     session.close()
     print("✅ Problems inserted successfully!")
-
 
 def process_submission_file(problem_id):
     """Process a single metadata file and insert submissions into the database."""
@@ -117,6 +117,7 @@ def insert_submissions():
     print("✅ Submissions Metadata inserted successfully!")
 
 def main():
+    init_db()
     insert_problems()
     insert_submissions()
 
