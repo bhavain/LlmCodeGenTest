@@ -3,6 +3,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 
+# Load environment variables
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import core.config
+
 # PostgreSQL Connection URL
 DATABASE_USERNAME = os.getenv("DATABASE_USERNAME")
 DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD")

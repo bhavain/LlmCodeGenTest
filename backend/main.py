@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 import os
+import core.config
 from api.problems import router as problems_router
 from api.benchmark import router as benchmark_router
 from api.submissions import router as submissions_router
 from api.testcases import router as testcases_router
 from fastapi.middleware.cors import CORSMiddleware
-import config
 
 app = FastAPI(title="TestMaker API")
 
